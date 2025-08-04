@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>E-commerce API Demo</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        h1, h2, h3 {
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .card {
+            flex: 1;
+            min-width: 300px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        .pagination button {
+            padding: 8px 16px;
+            margin: 0 5px;
+            cursor: pointer;
+            background-color: #f2f2f2;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .pagination button:hover {
+            background-color: #ddd;
+        }
+        .pagination button.active {
+            background-color: #4CAF50;
+            color: white;
+            border: 1px solid #4CAF50;
+        }
+        .pagination button:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+        #customerDetails {
+            display: none;
+        }
+        .back-button {
+            margin-bottom: 20px;
+            padding: 8px 16px;
+            cursor: pointer;
+            background-color: #f2f2f2;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>E-commerce API Demo</h1>
+    
+    <div id="apiStatus" class="card">
+        <h2>API Status</h2>
+        <div id="statusContent">
+            <div class="loading">Checking API status...</div>
+        </div>
+    </div>
+
+    <div id="customersList">
+        <h2>Customers List</h2>
+        <div class="card">
+            <div id="customersContent">
+                <div class="loading">Loading customers...</div>
+            </div>
+            <div class="pagination" id="pagination"></div>
+        </div>
+    </div>
+
+    <div id="customerDetails">
+        <button class="back-button" onclick="showCustomersList()">← Back to Customers List</button>
+        <h2>Customer Details</h2>
+        <div class="container">
+            <div class="card">
+                <h3>Customer Information</h3>
+                <div id="customerInfo">
+                    <div class="loading">Loading customer details...</div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>Order Statistics</h3>
+                <div id="orderStats">
+                    <div class="loading">Loading order statistics...</div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <h3>Recent Orders</h3>
+            <div id="recentOrders">
+                <div class="loading">Loading recent orders...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="overallStats" class="card">
+        <h2>Overall Statistics</h2>
+        <div id="statsContent">
+            <div class="loading">Loading statistics...</div>
+        </div>
+    </div>
+
+    <script>
+        // API base URL
+        const API_BASE_URL = 'http://localhost:5000/api';
+        
+        // Current page for pagination
+        let currentPage = 1;
+        let totalPages = 1;
+        let perPage = 10;
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            checkApiStatus();
+            loadCustomers(currentPage);
+            loadOverallStats();
+        });
+
+        // Check API status
+        async function checkApiStatus() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`);
+                const data = await response.json();
+                
+                let statusHtml = '';
+                if (data.status === 'healthy') {
+                    statusHtml = `
+                        <div style="color: green;">
+                            <strong>Status:</strong> ${data.status}<br>
+                            <strong>Message:</strong> ${data.message}
+                        </div>
+                    `;
+                } else {
+                    statusHtml = `
+                        <div style="color: red;">
+                            <strong>Status:</strong> ${data.status}<br>
+                            <strong>Message:</strong> ${data.message}
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('statusContent').innerHTML = statusHtml;
+            } catch (error) {
+                document.getElementById('statusContent').innerHTML = `
+                    <div style="color: red;">
+                        <strong>Error:</strong> Could not connect to API server.<br>
+                        <strong>Details:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Load customers list
+        async function loadCustomers(page) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/customers?page=${page}&per_page=${perPage}`);
+                const data = await response.json();
+                
+                // Update pagination info
+                currentPage = data.meta.page;
+                totalPages = data.meta.total_pages;
+                
+                // Generate customers table
+                let customersHtml = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Location</th>
+                                <th>Orders</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                data.data.forEach(customer => {
+                    customersHtml += `
+                        <tr>
+                            <td>${customer.id}</td>
+                            <td>${customer.first_name} ${customer.last_name}</td>
+                            <td>${customer.email}</td>
+                            <td>${customer.city}, ${customer.country}</td>
+                            <td>${customer.order_count}</td>
+                            <td><button onclick="loadCustomerDetails(${customer.id})">View Details</button></td>
+                        </tr>
+                    `;
+                });
+                
+                customersHtml += `
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('customersContent').innerHTML = customersHtml;
+                
+                // Update pagination controls
+                updatePagination();
+            } catch (error) {
+                document.getElementById('customersContent').innerHTML = `
+                    <div style="color: red;">
+                        <strong>Error:</strong> Could not load customers.<br>
+                        <strong>Details:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Update pagination controls
+        function updatePagination() {
+            let paginationHtml = '';
+            
+            // Previous button
+            paginationHtml += `
+                <button 
+                    onclick="loadCustomers(${currentPage - 1})" 
+                    ${currentPage === 1 ? 'disabled' : ''}
+                >
+                    Previous
+                </button>
+            `;
+            
+            // Page numbers
+            let startPage = Math.max(1, currentPage - 2);
+            let endPage = Math.min(totalPages, startPage + 4);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHtml += `
+                    <button 
+                        onclick="loadCustomers(${i})" 
+                        class="${i === currentPage ? 'active' : ''}"
+                    >
+                        ${i}
+                    </button>
+                `;
+            }
+            
+            // Next button
+            paginationHtml += `
+                <button 
+                    onclick="loadCustomers(${currentPage + 1})" 
+                    ${currentPage === totalPages ? 'disabled' : ''}
+                >
+                    Next
+                </button>
+            `;
+            
+            document.getElementById('pagination').innerHTML = paginationHtml;
+        }
+
+        // Load customer details
+        async function loadCustomerDetails(customerId) {
+            // Show customer details section and hide customers list
+            document.getElementById('customersList').style.display = 'none';
+            document.getElementById('customerDetails').style.display = 'block';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/customers/${customerId}`);
+                const data = await response.json();
+                
+                // Customer info
+                let customerInfoHtml = `
+                    <p><strong>ID:</strong> ${data.customer.id}</p>
+                    <p><strong>Name:</strong> ${data.customer.first_name} ${data.customer.last_name}</p>
+                    <p><strong>Email:</strong> ${data.customer.email}</p>
+                    <p><strong>Age:</strong> ${data.customer.age}</p>
+                    <p><strong>Gender:</strong> ${data.customer.gender}</p>
+                    <p><strong>Address:</strong> ${data.customer.street_address}</p>
+                    <p><strong>City:</strong> ${data.customer.city}</p>
+                    <p><strong>State:</strong> ${data.customer.state}</p>
+                    <p><strong>Postal Code:</strong> ${data.customer.postal_code}</p>
+                    <p><strong>Country:</strong> ${data.customer.country}</p>
+                    <p><strong>Traffic Source:</strong> ${data.customer.traffic_source}</p>
+                    <p><strong>Created At:</strong> ${data.customer.created_at}</p>
+                `;
+                
+                document.getElementById('customerInfo').innerHTML = customerInfoHtml;
+                
+                // Order stats
+                let orderStatsHtml = `
+                    <p><strong>Total Orders:</strong> ${data.order_count}</p>
+                `;
+                
+                if (data.order_count > 0) {
+                    orderStatsHtml += `
+                        <p><strong>Total Items Ordered:</strong> ${data.order_stats.total_items}</p>
+                        <h4>Order Status Distribution:</h4>
+                        <ul>
+                    `;
+                    
+                    for (const [status, count] of Object.entries(data.order_stats.status_distribution)) {
+                        orderStatsHtml += `<li>${status}: ${count}</li>`;
+                    }
+                    
+                    orderStatsHtml += `</ul>`;
+                } else {
+                    orderStatsHtml += `<p>No orders found for this customer.</p>`;
+                }
+                
+                document.getElementById('orderStats').innerHTML = orderStatsHtml;
+                
+                // Recent orders
+                if (data.recent_orders && data.recent_orders.length > 0) {
+                    let recentOrdersHtml = `
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Status</th>
+                                    <th>Created At</th>
+                                    <th>Shipped At</th>
+                                    <th>Delivered At</th>
+                                    <th>Items</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    
+                    data.recent_orders.forEach(order => {
+                        recentOrdersHtml += `
+                            <tr>
+                                <td>${order.order_id}</td>
+                                <td>${order.status}</td>
+                                <td>${order.created_at}</td>
+                                <td>${order.shipped_at || '-'}</td>
+                                <td>${order.delivered_at || '-'}</td>
+                                <td>${order.num_of_item}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    recentOrdersHtml += `
+                            </tbody>
+                        </table>
+                    `;
+                    
+                    document.getElementById('recentOrders').innerHTML = recentOrdersHtml;
+                } else {
+                    document.getElementById('recentOrders').innerHTML = `<p>No recent orders found.</p>`;
+                }
+                
+            } catch (error) {
+                document.getElementById('customerInfo').innerHTML = `
+                    <div style="color: red;">
+                        <strong>Error:</strong> Could not load customer details.<br>
+                        <strong>Details:</strong> ${error.message}
+                    </div>
+                `;
+                document.getElementById('orderStats').innerHTML = '';
+                document.getElementById('recentOrders').innerHTML = '';
+            }
+        }
+
+        // Show customers list (go back from customer details)
+        function showCustomersList() {
+            document.getElementById('customersList').style.display = 'block';
+            document.getElementById('customerDetails').style.display = 'none';
+        }
+
+        // Load overall statistics
+        async function loadOverallStats() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/stats`);
+                const data = await response.json();
+                
+                let statsHtml = `
+                    <div class="container">
+                        <div>
+                            <h3>Customer & Order Counts</h3>
+                            <p><strong>Total Customers:</strong> ${data.total_customers}</p>
+                            <p><strong>Total Orders:</strong> ${data.total_orders}</p>
+                        </div>
+                        
+                        <div>
+                            <h3>Orders by Status</h3>
+                            <ul>
+                `;
+                
+                for (const [status, count] of Object.entries(data.orders_by_status)) {
+                    statsHtml += `<li>${status}: ${count}</li>`;
+                }
+                
+                statsHtml += `
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h3>Top Countries</h3>
+                            <ul>
+                `;
+                
+                for (const [country, count] of Object.entries(data.top_countries)) {
+                    statsHtml += `<li>${country}: ${count} users</li>`;
+                }
+                
+                statsHtml += `
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('statsContent').innerHTML = statsHtml;
+            } catch (error) {
+                document.getElementById('statsContent').innerHTML = `
+                    <div style="color: red;">
+                        <strong>Error:</strong> Could not load statistics.<br>
+                        <strong>Details:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
