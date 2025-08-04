@@ -66,7 +66,7 @@
             cursor: not-allowed;
             opacity: 0.5;
         }
-        #customerDetails {
+        #customerDetails, #orderDetails {
             display: none;
         }
         .back-button {
@@ -87,6 +87,34 @@
             border-radius: 5px;
             overflow-x: auto;
         }
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            margin-bottom: 20px;
+        }
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            font-size: 16px;
+            margin: 0;
+        }
+        .tab button:hover {
+            background-color: #ddd;
+        }
+        .tab button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .tabcontent {
+            display: none;
+            padding: 20px;
+        }
     </style>
 </head>
 <body>
@@ -99,45 +127,84 @@
         </div>
     </div>
 
-    <div id="customersList">
-        <h2>Customers List</h2>
-        <div class="card">
-            <div id="customersContent">
-                <div class="loading">Loading customers...</div>
-            </div>
-            <div class="pagination" id="pagination"></div>
-        </div>
+    <div class="tab">
+        <button class="tablinks active" onclick="openTab(event, 'customersTab')">Customers</button>
+        <button class="tablinks" onclick="openTab(event, 'ordersTab')">Orders</button>
+        <button class="tablinks" onclick="openTab(event, 'statsTab')">Statistics</button>
     </div>
-
-    <div id="customerDetails">
-        <button class="back-button" onclick="showCustomersList()">← Back to Customers List</button>
-        <h2>Customer Details</h2>
-        <div class="container">
+    
+    <div id="customersTab" class="tabcontent" style="display: block;">
+        <div id="customersList">
+            <h2>Customers List</h2>
             <div class="card">
-                <h3>Customer Information</h3>
-                <div id="customerInfo">
-                    <div class="loading">Loading customer details...</div>
+                <div id="customersContent">
+                    <div class="loading">Loading customers...</div>
+                </div>
+                <div class="pagination" id="pagination"></div>
+            </div>
+        </div>
+
+        <div id="customerDetails">
+            <button class="back-button" onclick="showCustomersList()">← Back to Customers List</button>
+            <h2>Customer Details</h2>
+            <div class="container">
+                <div class="card">
+                    <h3>Customer Information</h3>
+                    <div id="customerInfo">
+                        <div class="loading">Loading customer details...</div>
+                    </div>
+                </div>
+                <div class="card">
+                    <h3>Order Statistics</h3>
+                    <div id="orderStats">
+                        <div class="loading">Loading order statistics...</div>
+                    </div>
                 </div>
             </div>
             <div class="card">
-                <h3>Order Statistics</h3>
-                <div id="orderStats">
-                    <div class="loading">Loading order statistics...</div>
+                <h3>Recent Orders</h3>
+                <div id="recentOrders">
+                    <div class="loading">Loading recent orders...</div>
                 </div>
             </div>
-        </div>
-        <div class="card">
-            <h3>Recent Orders</h3>
-            <div id="recentOrders">
-                <div class="loading">Loading recent orders...</div>
+            <div class="card">
+                <h3>All Customer Orders</h3>
+                <div id="customerOrdersContent">
+                    <div class="loading">Loading customer orders...</div>
+                </div>
+                <div class="pagination" id="customerOrdersPagination"></div>
             </div>
         </div>
     </div>
-
-    <div id="overallStats" class="card">
-        <h2>Overall Statistics</h2>
-        <div id="statsContent">
-            <div class="loading">Loading statistics...</div>
+    
+    <div id="ordersTab" class="tabcontent">
+        <div id="ordersList">
+            <h2>All Orders</h2>
+            <div class="card">
+                <div id="ordersContent">
+                    <div class="loading">Loading orders...</div>
+                </div>
+                <div class="pagination" id="ordersPagination"></div>
+            </div>
+        </div>
+        
+        <div id="orderDetails">
+            <button class="back-button" onclick="showOrdersList()">← Back to Orders List</button>
+            <h2>Order Details</h2>
+            <div class="card">
+                <div id="orderInfo">
+                    <div class="loading">Loading order details...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="statsTab" class="tabcontent">
+        <div id="overallStats" class="card">
+            <h2>Overall Statistics</h2>
+            <div id="statsContent">
+                <div class="loading">Loading statistics...</div>
+            </div>
         </div>
     </div>
 
@@ -145,17 +212,48 @@
         // API base URL
         const API_BASE_URL = 'http://localhost:5000/api';
         
-        // Current page for pagination
+        // Pagination variables
         let currentPage = 1;
         let totalPages = 1;
         let perPage = 10;
+        
+        // Orders pagination variables
+        let ordersCurrentPage = 1;
+        let ordersTotalPages = 1;
+        let ordersPerPage = 10;
+        
+        // Customer orders pagination variables
+        let customerOrdersCurrentPage = 1;
+        let customerOrdersTotalPages = 1;
+        let customerOrdersPerPage = 5;
+        let currentCustomerId = null;
 
         // Initialize the page
         document.addEventListener('DOMContentLoaded', function() {
             checkApiStatus();
-            loadCustomers(currentPage);
+            loadCustomers();
+            loadOrders();
             loadOverallStats();
         });
+        
+        // Tab functionality
+        function openTab(event, tabName) {
+            // Hide all tab content
+            const tabcontent = document.getElementsByClassName("tabcontent");
+            for (let i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            
+            // Remove active class from all tab buttons
+            const tablinks = document.getElementsByClassName("tablinks");
+            for (let i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            
+            // Show the current tab and add active class to the button
+            document.getElementById(tabName).style.display = "block";
+            event.currentTarget.className += " active";
+        }
 
         // Check API status
         async function checkApiStatus() {
@@ -297,6 +395,15 @@
             document.getElementById('customersList').style.display = 'none';
             document.getElementById('customerDetails').style.display = 'block';
             
+            // Set current customer ID for pagination
+            currentCustomerId = customerId;
+            
+            // Reset content to loading state
+            document.getElementById('customerInfo').innerHTML = '<div class="loading">Loading customer details...</div>';
+            document.getElementById('orderStats').innerHTML = '<div class="loading">Loading order statistics...</div>';
+            document.getElementById('recentOrders').innerHTML = '<div class="loading">Loading recent orders...</div>';
+            document.getElementById('customerOrdersContent').innerHTML = '<div class="loading">Loading customer orders...</div>';
+            
             try {
                 const response = await fetch(`${API_BASE_URL}/customers/${customerId}`);
                 const data = await response.json();
@@ -354,6 +461,7 @@
                                     <th>Shipped At</th>
                                     <th>Delivered At</th>
                                     <th>Items</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -368,6 +476,7 @@
                                 <td>${order.shipped_at || '-'}</td>
                                 <td>${order.delivered_at || '-'}</td>
                                 <td>${order.num_of_item}</td>
+                                <td><button onclick="loadOrderDetails(${order.order_id})">View Order</button></td>
                             </tr>
                         `;
                     });
@@ -382,6 +491,9 @@
                     document.getElementById('recentOrders').innerHTML = `<p>No recent orders found.</p>`;
                 }
                 
+                // Load all customer orders with pagination
+                loadCustomerOrders(customerId);
+                
             } catch (error) {
                 document.getElementById('customerInfo').innerHTML = `
                     <div style="color: red;">
@@ -391,6 +503,8 @@
                 `;
                 document.getElementById('orderStats').innerHTML = '';
                 document.getElementById('recentOrders').innerHTML = '';
+                document.getElementById('customerOrdersContent').innerHTML = '';
+                document.getElementById('customerOrdersPagination').innerHTML = '';
             }
         }
 
@@ -398,6 +512,258 @@
         function showCustomersList() {
             document.getElementById('customersList').style.display = 'block';
             document.getElementById('customerDetails').style.display = 'none';
+        }
+        
+        // Load all orders with pagination
+        async function loadOrders(page = 1) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/orders?page=${page}&per_page=${ordersPerPage}`);
+                const data = await response.json();
+                
+                // Update pagination info
+                ordersCurrentPage = data.meta.page;
+                ordersTotalPages = data.meta.total_pages;
+                
+                // Generate orders table
+                let ordersHtml = `
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Customer</th>
+                                <th>Created At</th>
+                                <th>Delivered At</th>
+                                <th>Items</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                data.orders.forEach(order => {
+                    ordersHtml += `
+                        <tr>
+                            <td>${order.order_id}</td>
+                            <td>${order.first_name} ${order.last_name}</td>
+                            <td>${order.created_at}</td>
+                            <td>${order.delivered_at || '-'}</td>
+                            <td>${order.num_of_item}</td>
+                            <td><button onclick="loadOrderDetails(${order.order_id})">View Details</button></td>
+                        </tr>
+                    `;
+                });
+                
+                ordersHtml += `
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('ordersContent').innerHTML = ordersHtml;
+                
+                // Update pagination controls
+                updateOrdersPagination();
+            } catch (error) {
+                document.getElementById('ordersContent').innerHTML = `
+                    <div class="error-message">
+                        <strong>Error:</strong> Could not load orders.<br>
+                        <strong>Details:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Update orders pagination controls
+        function updateOrdersPagination() {
+            let paginationHtml = '';
+            
+            // Previous button
+            paginationHtml += `
+                <button 
+                    onclick="loadOrders(${ordersCurrentPage - 1})" 
+                    ${ordersCurrentPage === 1 ? 'disabled' : ''}
+                >
+                    Previous
+                </button>
+            `;
+            
+            // Page numbers
+            let startPage = Math.max(1, ordersCurrentPage - 2);
+            let endPage = Math.min(ordersTotalPages, startPage + 4);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHtml += `
+                    <button 
+                        onclick="loadOrders(${i})" 
+                        class="${i === ordersCurrentPage ? 'active' : ''}"
+                    >
+                        ${i}
+                    </button>
+                `;
+            }
+            
+            // Next button
+            paginationHtml += `
+                <button 
+                    onclick="loadOrders(${ordersCurrentPage + 1})" 
+                    ${ordersCurrentPage === ordersTotalPages ? 'disabled' : ''}
+                >
+                    Next
+                </button>
+            `;
+            
+            document.getElementById('ordersPagination').innerHTML = paginationHtml;
+        }
+
+        // Load order details
+        async function loadOrderDetails(orderId) {
+            // Show order details section and hide orders list
+            document.getElementById('ordersList').style.display = 'none';
+            document.getElementById('orderDetails').style.display = 'block';
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/orders/${orderId}`);
+                const data = await response.json();
+                
+                // Order info
+                let orderInfoHtml = `
+                    <div class="detail-item"><strong>Order ID:</strong> ${data.order_id}</div>
+                    <div class="detail-item"><strong>Status:</strong> ${data.status}</div>
+                    <div class="detail-item"><strong>Items:</strong> ${data.num_of_item}</div>
+                    <div class="detail-item"><strong>Created At:</strong> ${data.created_at}</div>
+                    <div class="detail-item"><strong>Shipped At:</strong> ${data.shipped_at || 'N/A'}</div>
+                    <div class="detail-item"><strong>Delivered At:</strong> ${data.delivered_at || 'N/A'}</div>
+                    <div class="detail-item"><strong>Returned At:</strong> ${data.returned_at || 'N/A'}</div>
+                    <h3>Customer Information</h3>
+                    <div class="detail-item"><strong>Customer ID:</strong> ${data.user_id}</div>
+                    <div class="detail-item"><strong>Name:</strong> ${data.first_name} ${data.last_name}</div>
+                    <div class="detail-item"><strong>Email:</strong> ${data.email}</div>
+                    <div class="detail-item"><strong>Gender:</strong> ${data.gender}</div>
+                    <button onclick="loadCustomerDetails(${data.user_id})">View Customer Details</button>
+                `;
+                
+                document.getElementById('orderInfo').innerHTML = orderInfoHtml;
+            } catch (error) {
+                document.getElementById('orderInfo').innerHTML = `
+                    <div class="error-message">
+                        <strong>Error:</strong> Could not load order details.<br>
+                        <strong>Details:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Show orders list (go back from order details)
+        function showOrdersList() {
+            document.getElementById('ordersList').style.display = 'block';
+            document.getElementById('orderDetails').style.display = 'none';
+        }
+        
+        // Load all orders for a specific customer with pagination
+        async function loadCustomerOrders(customerId, page = 1) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/customers/${customerId}/orders?page=${page}&per_page=${customerOrdersPerPage}`);
+                const data = await response.json();
+                
+                // Update pagination info
+                customerOrdersCurrentPage = data.meta.page;
+                customerOrdersTotalPages = data.meta.total_pages;
+                
+                // Generate orders table
+                let ordersHtml = `
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Order ID</th>
+                                <th>Status</th>
+                                <th>Created At</th>
+                                <th>Delivered At</th>
+                                <th>Items</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                
+                if (data.orders && data.orders.length > 0) {
+                    data.orders.forEach(order => {
+                        ordersHtml += `
+                            <tr>
+                                <td>${order.order_id}</td>
+                                <td>${order.status}</td>
+                                <td>${order.created_at}</td>
+                                <td>${order.delivered_at || '-'}</td>
+                                <td>${order.num_of_item}</td>
+                                <td><button onclick="loadOrderDetails(${order.order_id})">View Details</button></td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    ordersHtml += `
+                        <tr>
+                            <td colspan="6">No orders found for this customer.</td>
+                        </tr>
+                    `;
+                }
+                
+                ordersHtml += `
+                        </tbody>
+                    </table>
+                `;
+                
+                document.getElementById('customerOrdersContent').innerHTML = ordersHtml;
+                
+                // Update pagination controls
+                updateCustomerOrdersPagination();
+            } catch (error) {
+                document.getElementById('customerOrdersContent').innerHTML = `
+                    <div class="error-message">
+                        <strong>Error:</strong> Could not load customer orders.<br>
+                        <strong>Details:</strong> ${error.message}
+                    </div>
+                `;
+            }
+        }
+
+        // Update customer orders pagination controls
+        function updateCustomerOrdersPagination() {
+            let paginationHtml = '';
+            
+            // Previous button
+            paginationHtml += `
+                <button 
+                    onclick="loadCustomerOrders(${currentCustomerId}, ${customerOrdersCurrentPage - 1})" 
+                    ${customerOrdersCurrentPage === 1 ? 'disabled' : ''}
+                >
+                    Previous
+                </button>
+            `;
+            
+            // Page numbers
+            let startPage = Math.max(1, customerOrdersCurrentPage - 2);
+            let endPage = Math.min(customerOrdersTotalPages, startPage + 4);
+            
+            for (let i = startPage; i <= endPage; i++) {
+                paginationHtml += `
+                    <button 
+                        onclick="loadCustomerOrders(${currentCustomerId}, ${i})" 
+                        class="${i === customerOrdersCurrentPage ? 'active' : ''}"
+                    >
+                        ${i}
+                    </button>
+                `;
+            }
+            
+            // Next button
+            paginationHtml += `
+                <button 
+                    onclick="loadCustomerOrders(${currentCustomerId}, ${customerOrdersCurrentPage + 1})" 
+                    ${customerOrdersCurrentPage === customerOrdersTotalPages ? 'disabled' : ''}
+                >
+                    Next
+                </button>
+            `;
+            
+            document.getElementById('customerOrdersPagination').innerHTML = paginationHtml;
         }
 
         // Load overall statistics

@@ -6,6 +6,14 @@ import os
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+# Database initialization
+def init_db():
+    conn = sqlite3.connect('ecommerce.db')
+    conn.execute('PRAGMA foreign_keys = ON')
+    conn.close()
+
+init_db()
+
 # Database connection helper
 def get_db_connection():
     conn = sqlite3.connect('ecommerce.db')
@@ -224,6 +232,179 @@ def health_check():
         return jsonify({'status': 'healthy', 'message': 'API is running and database is accessible'}), 200
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+# New endpoints for order data
+@app.route('/api/orders', methods=['GET'])
+def get_orders():
+    try:
+        # Get query parameters for pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        
+        # Calculate offset
+        offset = (page - 1) * per_page
+        
+        conn = get_db_connection()
+        
+        # Get total count for pagination metadata
+        total_count = conn.execute('SELECT COUNT(*) FROM orders').fetchone()[0]
+        
+        # Get orders with pagination
+        orders = conn.execute(
+            '''
+            SELECT o.order_id, o.user_id, o.status, o.created_at, o.shipped_at, 
+                   o.delivered_at, o.num_of_item, u.first_name, u.last_name 
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            ORDER BY o.created_at DESC
+            LIMIT ? OFFSET ?
+            ''', 
+            (per_page, offset)
+        ).fetchall()
+        
+        # Convert to list of dictionaries
+        order_list = []
+        for order in orders:
+            order_dict = dict(order)
+            order_list.append(order_dict)
+        
+        conn.close()
+        
+        # Prepare pagination metadata
+        total_pages = (total_count + per_page - 1) // per_page  # Ceiling division
+        
+        return jsonify({
+            'data': order_list,
+            'meta': {
+                'page': page,
+                'per_page': per_page,
+                'total_count': total_count,
+                'total_pages': total_pages
+            }
+        }), 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/orders/<int:order_id>', methods=['GET'])
+def get_order(order_id):
+    try:
+        conn = get_db_connection()
+        
+        # Get order details
+        order = conn.execute(
+            '''
+            SELECT o.*, u.first_name, u.last_name, u.email 
+            FROM orders o
+            JOIN users u ON o.user_id = u.id
+            WHERE o.order_id = ?
+            ''', 
+            (order_id,)
+        ).fetchone()
+        
+        if order is None:
+            conn.close()
+            return jsonify({'error': 'Order not found'}), 404
+        
+        # Convert to dictionary
+        order_dict = dict(order)
+        
+        conn.close()
+        
+        return jsonify(order_dict), 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/customers/<int:customer_id>/orders', methods=['GET'])
+def get_customer_orders(customer_id):
+    try:
+        # Get query parameters for pagination
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 10, type=int)
+        
+        # Calculate offset
+        offset = (page - 1) * per_page
+        
+        conn = get_db_connection()
+        
+        # Check if customer exists
+        customer = conn.execute('SELECT id FROM users WHERE id = ?', (customer_id,)).fetchone()
+        if customer is None:
+            conn.close()
+            return jsonify({'error': 'Customer not found'}), 404
+        
+        # Get total count for pagination metadata
+        total_count = conn.execute(
+            'SELECT COUNT(*) FROM orders WHERE user_id = ?', 
+            (customer_id,)
+        ).fetchone()[0]
+        
+        # Get orders for the customer with pagination
+        orders = conn.execute(
+            '''
+            SELECT order_id, status, created_at, shipped_at, delivered_at, 
+                   returned_at, num_of_item 
+            FROM orders 
+            WHERE user_id = ? 
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+            ''', 
+            (customer_id, per_page, offset)
+        ).fetchall()
+        
+        # Convert to list of dictionaries
+        order_list = [dict(order) for order in orders]
+        
+        # Get order statistics
+        order_stats = {}
+        if total_count > 0:
+            # Get status distribution
+            status_counts = conn.execute(
+                '''
+                SELECT status, COUNT(*) as count 
+                FROM orders 
+                WHERE user_id = ? 
+                GROUP BY status
+                ''', 
+                (customer_id,)
+            ).fetchall()
+            
+            status_dict = {status['status']: status['count'] for status in status_counts}
+            order_stats['status_distribution'] = status_dict
+            
+            # Get total items ordered
+            total_items = conn.execute(
+                '''
+                SELECT SUM(num_of_item) as total 
+                FROM orders 
+                WHERE user_id = ?
+                ''', 
+                (customer_id,)
+            ).fetchone()['total']
+            
+            order_stats['total_items'] = total_items
+        
+        conn.close()
+        
+        # Prepare pagination metadata
+        total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 0
+        
+        return jsonify({
+            'customer_id': customer_id,
+            'order_count': total_count,
+            'order_stats': order_stats,
+            'orders': order_list,
+            'meta': {
+                'page': page,
+                'per_page': per_page,
+                'total_count': total_count,
+                'total_pages': total_pages
+            }
+        }), 200
+    except Exception as e:
+        print(f"Error: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

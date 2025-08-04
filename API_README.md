@@ -171,6 +171,116 @@ Error responses include a JSON object with an error message:
 
 The API includes CORS headers to allow cross-origin requests from any domain, making it easy to integrate with frontend applications.
 
+### List All Orders
+
+```
+GET /api/orders
+```
+
+Returns a paginated list of orders with basic information including customer details.
+
+**Query Parameters:**
+- `page`: Page number (default: 1)
+- `per_page`: Number of orders per page (default: 10)
+
+**Example Response:**
+```json
+{
+  "data": [
+    {
+      "order_id": 1001,
+      "user_id": 42,
+      "status": "Complete",
+      "created_at": "2022-03-15 14:30:00+00:00",
+      "shipped_at": "2022-03-16 10:15:00+00:00",
+      "delivered_at": "2022-03-18 09:45:00+00:00",
+      "num_of_item": 3,
+      "first_name": "John",
+      "last_name": "Doe"
+    },
+    ...
+  ],
+  "meta": {
+    "page": 1,
+    "per_page": 10,
+    "total_count": 125000,
+    "total_pages": 12500
+  }
+}
+```
+
+### Get Order Details
+
+```
+GET /api/orders/{order_id}
+```
+
+Returns detailed information about a specific order, including customer information.
+
+**Example Response:**
+```json
+{
+  "order_id": 1001,
+  "user_id": 42,
+  "status": "Complete",
+  "gender": "M",
+  "created_at": "2022-03-15 14:30:00+00:00",
+  "returned_at": null,
+  "shipped_at": "2022-03-16 10:15:00+00:00",
+  "delivered_at": "2022-03-18 09:45:00+00:00",
+  "num_of_item": 3,
+  "first_name": "John",
+  "last_name": "Doe",
+  "email": "john.doe@example.com"
+}
+```
+
+### Get Customer Orders
+
+```
+GET /api/customers/{customer_id}/orders
+```
+
+Returns all orders for a specific customer with pagination and order statistics.
+
+**Query Parameters:**
+- `page`: Page number (default: 1)
+- `per_page`: Number of orders per page (default: 10)
+
+**Example Response:**
+```json
+{
+  "customer_id": 42,
+  "order_count": 5,
+  "order_stats": {
+    "status_distribution": {
+      "Complete": 3,
+      "Shipped": 1,
+      "Processing": 1
+    },
+    "total_items": 12
+  },
+  "orders": [
+    {
+      "order_id": 1001,
+      "status": "Complete",
+      "created_at": "2022-03-15 14:30:00+00:00",
+      "shipped_at": "2022-03-16 10:15:00+00:00",
+      "delivered_at": "2022-03-18 09:45:00+00:00",
+      "returned_at": null,
+      "num_of_item": 3
+    },
+    ...
+  ],
+  "meta": {
+    "page": 1,
+    "per_page": 10,
+    "total_count": 5,
+    "total_pages": 1
+  }
+}
+```
+
 ## Testing
 
 You can test the API using tools like:
@@ -188,11 +298,17 @@ curl http://localhost:5000/api/health
 # List customers (first page)
 curl http://localhost:5000/api/customers
 
-# List customers (second page, 20 per page)
-curl http://localhost:5000/api/customers?page=2&per_page=20
-
 # Get customer details
 curl http://localhost:5000/api/customers/1
+
+# List all orders for a customer
+curl http://localhost:5000/api/customers/1/orders
+
+# List all orders (first page)
+curl http://localhost:5000/api/orders
+
+# Get order details
+curl http://localhost:5000/api/orders/1001
 
 # Get overall statistics
 curl http://localhost:5000/api/stats
